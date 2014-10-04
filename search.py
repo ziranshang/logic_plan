@@ -149,13 +149,15 @@ def atLeastOne(expressions) :
     """
     "*** YOUR CODE HERE ***"
     
-    expression_to_return = expressions[0]
+    if len(expressions) <= 1:
+        return expressions[0]
     
-    if len(expressions) > 1:
-        for i in range(len(expressions)):
-            if i == 0:
-                continue
-            expression_to_return = expression_to_return | expressions[i]
+    expression_to_return = expressions[0]
+
+    for i in range(len(expressions)):
+        if i == 0:
+            continue
+        expression_to_return = expression_to_return | expressions[i]
     
     return expression_to_return
     
@@ -169,15 +171,17 @@ def atMostOne(expressions) :
     """
     "*** YOUR CODE HERE ***"
 
+    if len(expressions) <= 1:
+        return expressions[0]
+
     expression_to_return = (~expressions[0]) | (~expressions[1]) 
 
-    if len(expressions) > 1:
-        for i in range(len(expressions)):
-            for j in range(len(expressions)):
-                if (i == 0 and j == 1) or i == j:
-                    continue
+    for i in range(len(expressions)):
+        for j in range(len(expressions)):
+            if (i == 0 and j == 1) or i == j:
+                continue
                 
-                expression_to_return = expression_to_return & ((~expressions[i]) | (~expressions[j]))
+            expression_to_return = expression_to_return & ((~expressions[i]) | (~expressions[j]))
 
     return expression_to_return
     
