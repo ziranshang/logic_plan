@@ -11,6 +11,8 @@
 # (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
 # Student side autograding was added by Brad Miller, Nick Hay, and 
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
+from logic import pycoSAT
+from game import Game
 
 
 # search.py
@@ -192,6 +194,48 @@ def positionLogicPlan(problem):
     Note that STOP is not an available action.
     """
     "*** YOUR CODE HERE ***"
+    
+    def transition_models(problem, t):
+        transition_list = []
+        for time in range(0, t):
+            for action in problem.getStartState().actions():
+                #TODO: pacman at curr x,y at time t iff at prev x,y and move(prev to curr) is in actions
+                
+                
+                transition_list += action_exclusion(problem, problem.getStartState().actions(), t) # add exclusions for current valid actions
+                
+                
+    # for all pairs of legal actions at a given time, ensure that you can only do one action at that time
+    def action_exclusion(problem, actions, t):
+        exclusion_list = []
+        for i in range(0, len(actions)):
+            for j in range(0, len(actions)):
+                if not i == j:
+                    action_one = logic.PropSymbolExpr(actions[i], t)
+                    action_two = logic.PropSymbolExpr(actions[j], t)
+                    exclusion_list.append((~action_one) | (~action_two))
+                    
+    def goal_sentence(problem, t):
+        goal_state = problem.getGoalState()
+        logic.PropSymbolExpr('At', goal_state[0], goal_state[1], t) # at goal state at time t
+        
+    def solve_sentence(problem, t_max):
+        initial_state = problem.getStartState() # pacman initial position
+        initial = logic.PropSymbolExpr('At', initial_state[0], initial_state[1], 0) # pacman at initial position at time 0
+        
+        for t in range(0, t_max):
+            transition_and_exclusion = transition_models(problem, t)
+            goal = goal_sentence(problem, t)
+            solution_model = logic.pycoSAT(initial + transition_and_exclusion + goal)
+            
+            if not solution_model == False:
+                return solution_model
+    
+    solution_model = solve_sentence(problem, 50)
+    
+    actions = ['North', 'South', 'East', 'West'] # some other way to get actions?
+    return extractActionSequence(solution_model, actions)
+    
     util.raiseNotDefined()
 
 
