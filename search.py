@@ -148,7 +148,7 @@ def atLeastOne(expressions) :
     True
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    return reduce(lambda x, y: x | y, expressions)
 
 
 def atMostOne(expressions) :
@@ -157,7 +157,7 @@ def atMostOne(expressions) :
     that represents the logic that at most one of the expressions in the list is true.
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    return ~reduce(lambda x, y: x & y, expressions)
 
 
 def exactlyOne(expressions) :
