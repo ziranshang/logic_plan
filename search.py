@@ -150,7 +150,18 @@ def atLeastOne(expressions) :
     True
     """
     "*** YOUR CODE HERE ***"
-    return reduce(lambda x, y: x | y, expressions)
+    
+    if len(expressions) <= 1:
+        return expressions[0]
+    
+    expression_to_return = expressions[0]
+
+    for i in range(len(expressions)):
+        if i == 0:
+            continue
+        expression_to_return = expression_to_return | expressions[i]
+    
+    return expression_to_return
 
 
 def atMostOne(expressions) :
@@ -159,7 +170,20 @@ def atMostOne(expressions) :
     that represents the logic that at most one of the expressions in the list is true.
     """
     "*** YOUR CODE HERE ***"
-    return ~reduce(lambda x, y: x & y, expressions)
+
+    if len(expressions) <= 1:
+        return expressions[0]
+
+    expression_to_return = (~expressions[0]) | (~expressions[1]) 
+
+    for i in range(len(expressions)):
+        for j in range(len(expressions)):
+            if (i == 0 and j == 1) or i == j:
+                continue
+                
+            expression_to_return = expression_to_return & ((~expressions[i]) | (~expressions[j]))
+
+    return expression_to_return
 
 
 def exactlyOne(expressions) :
@@ -168,7 +192,8 @@ def exactlyOne(expressions) :
     that represents the logic that exactly one of the expressions in the list is true.
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    
+    return atMostOne(expressions) & atLeastOne(expressions)
 
 
 def extractActionSequence(model, actions):
@@ -184,7 +209,13 @@ def extractActionSequence(model, actions):
     ['West', 'South', 'North']
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    plan = []
+    for i in range(len(model.keys())): #TODO: check if I can simplify the possibilities of times...
+        for action in actions:
+            action_step = str(action) + "[" + str(i) + "]"
+            if logic.PropSymbolExpr(action_step) in model.keys() and model[logic.PropSymbolExpr(action_step)]:
+                plan.append(action)
+    return plan
 
 
 def positionLogicPlan(problem):
