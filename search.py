@@ -184,7 +184,13 @@ def extractActionSequence(model, actions):
     ['West', 'South', 'North']
     """
     "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
+    plan = []
+    for i in range(len(model.keys())): #TODO: check if I can simplify the possibilities of times...
+        for action in actions:
+            action_step = str(action) + "[" + str(i) + "]"
+            if logic.PropSymbolExpr(action_step) in model.keys() and model[logic.PropSymbolExpr(action_step)]:
+                plan.append(action)
+    return plan
 
 
 def positionLogicPlan(problem):
