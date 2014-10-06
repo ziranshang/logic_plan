@@ -12,7 +12,7 @@
 # Student side autograding was added by Brad Miller, Nick Hay, and 
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 from logic import pycoSAT
-from game import Game
+from game import Game, Directions
 
 
 # search.py
@@ -196,48 +196,80 @@ def positionLogicPlan(problem):
     "*** YOUR CODE HERE ***"
     
     def transition_models(problem, t):
+        transition_list = [] # list of successor state axioms in cnf
+        # while time <= t
+        # for each action in valid actions, successor state at t+1 iff action at t and current state at t
+        # do the same for each successor state
+#         for time in range(1, t): # not needed?
+#             for action in problem.actions(problem.getStartState()):
+#                 #TODO: pacman at curr x,y at time t iff at prev x,y and move(prev to curr) is in actions
+#                 next_state = problem.result(problem.getStartState(), action)
+#                 transition_list += generate_successor_transitions(problem, next_state, action, 1, t)
+#                 transition_list += action_exclusion(problem, problem.getStartState().actions(), t) # add exclusions for current valid actions
+        
+        initial_state = problem.getStartState()
+        for action in problem.actions(initial_state):
+            transition_list += generate_successor_transitions(problem, initial_state, action, 0, t)
+                
+        return transition_list
+    
+    # generate successor state axioms for the next states
+    # of the form: (next state at time t + 1) iff ((current state at time t) and (action to get to next state at time t))
+    def generate_successor_transitions(problem, current_state, current_action, t_curr, t_max):
         transition_list = []
-        for time in range(0, t):
-            for action in problem.getStartState().actions():
-                #TODO: pacman at curr x,y at time t iff at prev x,y and move(prev to curr) is in actions
-                
-                
-                transition_list += action_exclusion(problem, problem.getStartState().actions(), t) # add exclusions for current valid actions
-                
-                
+        
+        if t_curr >= t_max:
+            return []
+        
+        for action in problem.actions(current_state):
+            current_state_expr = logic.PropSymbolExpr('At', current_state[0], current_state[1], t_curr)
+            next_state = problem.result(current_state, action)
+            next_state_expr = logic.PropSymbolExpr('At', next_state[0], next_state[1], t_curr + 1)
+            action_expr = logic.PropSymbolExpr(action, t_curr)
+            next_state_axiom = logic.Expr('<=>', next_state_expr, (current_state_expr & action_expr))
+            
+            transition_list += next_state_axiom.to_cnf()
+            transition_list += generate_successor_transitions(problem, next_state, action, t_curr + 1, t_max)
+        
+        return transition_list
+    
     # for all pairs of legal actions at a given time, ensure that you can only do one action at that time
     def action_exclusion(problem, actions, t):
-        exclusion_list = []
+        exclusion_list = [] # list of action exclusion axioms in cnf
         for i in range(0, len(actions)):
             for j in range(0, len(actions)):
                 if not i == j:
                     action_one = logic.PropSymbolExpr(actions[i], t)
                     action_two = logic.PropSymbolExpr(actions[j], t)
-                    exclusion_list.append((~action_one) | (~action_two))
+                    exclusion_list += ((~action_one) | (~action_two)).to_cnf() # append to list as cnf
+                    
+        return exclusion_list
                     
     def goal_sentence(problem, t):
         goal_state = problem.getGoalState()
-        logic.PropSymbolExpr('At', goal_state[0], goal_state[1], t) # at goal state at time t
+        goal_expr = logic.PropSymbolExpr('At', goal_state[0], goal_state[1], t) # at goal state at time t
+        
+        return goal_expr.to_cnf()
         
     def solve_sentence(problem, t_max):
         initial_state = problem.getStartState() # pacman initial position
-        initial = logic.PropSymbolExpr('At', initial_state[0], initial_state[1], 0) # pacman at initial position at time 0
+        initial_cnf = (logic.PropSymbolExpr('At', initial_state[0], initial_state[1], 0)).to_cnf() # pacman at initial position at time 0
         
         for t in range(0, t_max):
-            transition_and_exclusion = transition_models(problem, t)
-            goal = goal_sentence(problem, t)
+            transition_and_exclusion_cnf = transition_models(problem, t)
+            goal_cnf = goal_sentence(problem, t)
             
             # convert Expression to CNF before solving
             
-            solution_model = logic.pycoSAT(initial + transition_and_exclusion + goal)
+            solution_model = logic.pycoSAT(initial_cnf + transition_and_exclusion_cnf + goal_cnf)
             
             if not solution_model == False:
                 return solution_model
     
-    solution_model = solve_sentence(problem, 50) # max 50 time steps 
+    solution = solve_sentence(problem, 50) # max 50 time steps 
+    actions = [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]
     
-    actions = ['North', 'South', 'East', 'West'] # some other way to get actions?
-    return extractActionSequence(solution_model, actions)
+    return extractActionSequence(solution, actions)
     
     util.raiseNotDefined()
 
