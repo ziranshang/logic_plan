@@ -148,9 +148,6 @@ def atLeastOne(expressions) :
     True
     """
     "*** YOUR CODE HERE ***"
-<<<<<<< HEAD
-    return reduce(lambda x, y: x | y, expressions)
-=======
     
     if len(expressions) <= 1:
         return expressions[0]
@@ -163,9 +160,6 @@ def atLeastOne(expressions) :
         expression_to_return = expression_to_return | expressions[i]
     
     return expression_to_return
-    
-    util.raiseNotDefined()
->>>>>>> origin/question_1
 
 
 def atMostOne(expressions) :
@@ -174,9 +168,6 @@ def atMostOne(expressions) :
     that represents the logic that at most one of the expressions in the list is true.
     """
     "*** YOUR CODE HERE ***"
-<<<<<<< HEAD
-    return ~reduce(lambda x, y: x & y, expressions)
-=======
 
     if len(expressions) <= 1:
         return expressions[0]
@@ -191,9 +182,6 @@ def atMostOne(expressions) :
             expression_to_return = expression_to_return & ((~expressions[i]) | (~expressions[j]))
 
     return expression_to_return
-    
-    util.raiseNotDefined()
->>>>>>> origin/question_1
 
 
 def exactlyOne(expressions) :
@@ -204,8 +192,6 @@ def exactlyOne(expressions) :
     "*** YOUR CODE HERE ***"
     
     return atMostOne(expressions) & atLeastOne(expressions)
-    
-    util.raiseNotDefined()
 
 
 def extractActionSequence(model, actions):
