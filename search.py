@@ -226,12 +226,15 @@ def positionLogicPlan(problem):
         for t in range(0, t_max):
             transition_and_exclusion = transition_models(problem, t)
             goal = goal_sentence(problem, t)
+            
+            # convert Expression to CNF before solving
+            
             solution_model = logic.pycoSAT(initial + transition_and_exclusion + goal)
             
             if not solution_model == False:
                 return solution_model
     
-    solution_model = solve_sentence(problem, 50)
+    solution_model = solve_sentence(problem, 50) # max 50 time steps 
     
     actions = ['North', 'South', 'East', 'West'] # some other way to get actions?
     return extractActionSequence(solution_model, actions)
