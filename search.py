@@ -150,7 +150,18 @@ def atLeastOne(expressions) :
     True
     """
     "*** YOUR CODE HERE ***"
-    return reduce(lambda x, y: x | y, expressions)
+    
+    if len(expressions) <= 1:
+        return expressions[0]
+    
+    expression_to_return = expressions[0]
+
+    for i in range(len(expressions)):
+        if i == 0:
+            continue
+        expression_to_return = expression_to_return | expressions[i]
+    
+    return expression_to_return
 
 
 def atMostOne(expressions) :
@@ -159,7 +170,19 @@ def atMostOne(expressions) :
     that represents the logic that at most one of the expressions in the list is true.
     """
     "*** YOUR CODE HERE ***"
-    return ~reduce(lambda x, y: x & y, expressions)
+    if len(expressions) <= 1:
+        return expressions[0]
+
+    expression_to_return = (~expressions[0]) | (~expressions[1]) 
+
+    for i in range(len(expressions)):
+        for j in range(len(expressions)):
+            if (i == 0 and j == 1) or i == j:
+                continue
+                
+            expression_to_return = expression_to_return & ((~expressions[i]) | (~expressions[j]))
+
+    return expression_to_return
 
 
 def exactlyOne(expressions) :
@@ -168,6 +191,9 @@ def exactlyOne(expressions) :
     that represents the logic that exactly one of the expressions in the list is true.
     """
     "*** YOUR CODE HERE ***"
+    
+    return atMostOne(expressions) & atLeastOne(expressions)
+    
     util.raiseNotDefined()
 
 
@@ -216,48 +242,54 @@ def positionLogicPlan(problem):
 #                 transition_list += action_exclusion(problem, problem.getStartState().actions(), t) # add exclusions for current valid actions
         
         initial_state = problem.getStartState()
+
         for action in problem.actions(initial_state):
-            transition_list += generate_successor_transitions(problem, initial_state, action, 0, t)
+            transition_list += generate_successor_transitions(problem, initial_state, action, 0, t, [])
                 
         return transition_list
     
     # generate successor state axioms for the next states
     # of the form: (next state at time t + 1) iff ((current state at time t) and (action to get to next state at time t))
-    def generate_successor_transitions(problem, current_state, current_action, t_curr, t_max):
+    def generate_successor_transitions(problem, current_state, current_action, t_curr, t_max, visited_states):
         transition_list = []
+        print(str(t_curr) + ' ' + str(t_max))
+        #if t_curr >= t_max:
+            #return []
         
-        if t_curr >= t_max:
+        if current_state in visited_states:
             return []
         
         for action in problem.actions(current_state):
             current_state_symbol = logic.PropSymbolExpr('At', current_state[0], current_state[1], t_curr)
             current_state_expr = logic.Expr(str(current_state_symbol))
             next_state = problem.result(current_state, action)[0]
+        
             next_state_symbol = logic.PropSymbolExpr('At', next_state[0], next_state[1], t_curr + 1)
             next_state_expr = logic.Expr(str(next_state_symbol))
             action_symbol = logic.PropSymbolExpr(action, t_curr)
             action_expr = logic.Expr(str(action_symbol))
             next_state_axiom = ~(next_state_expr ^ (current_state_expr & action_expr))
+            print(next_state_axiom)
+            
+            visited_states.append(current_state)
             
             transition_list.append(logic.to_cnf(next_state_axiom))
             transition_list += action_exclusion(problem, problem.actions(current_state), t_curr)
-            transition_list += generate_successor_transitions(problem, next_state, action, t_curr + 1, t_max)
+            transition_list += generate_successor_transitions(problem, next_state, action, t_curr + 1, t_max, visited_states)
         
         return transition_list
     
     # for all pairs of legal actions at a given time, ensure that you can only do one action at that time
     def action_exclusion(problem, actions, t):
-        exclusion_list = [] # list of action exclusion axioms in cnf
-        for i in range(0, len(actions)):
-            for j in range(0, len(actions)):
-                if not (i == j):
-                    action_one_symbol = logic.PropSymbolExpr(actions[i], t)
-                    action_two_symbol = logic.PropSymbolExpr(actions[j], t)
-                    action_one = logic.Expr(str(action_one_symbol))
-                    action_two = logic.Expr(str(action_two_symbol))
-                    exclusion_list.append(logic.to_cnf((~action_one) | (~action_two))) # append to list as cnf
-                    
-        return exclusion_list
+        action_expression_list = []
+        
+        for action in actions:
+            action_symbol = logic.PropSymbolExpr(action, t)
+            action_expr = logic.Expr(str(action_symbol))
+            action_expression_list.append(action_expr)
+            
+        exclusion_list = exactlyOne(action_expression_list)
+        return [exclusion_list]
     
     # ensure that you cannot be in 2 places at the same time
     def location_exclusion(problem, t):
@@ -290,13 +322,15 @@ def positionLogicPlan(problem):
         initial_symbol = logic.PropSymbolExpr('At', initial_state[0], initial_state[1], 0)
         initial_cnf = logic.to_cnf(logic.Expr(str(initial_symbol))) # pacman at initial position at time 0
         
-        for t in range(0, t_max + 1):
+        for t in range(1, t_max + 1):
             transition_and_exclusion_cnf = transition_models(problem, t)
             goal_cnf = goal_sentence(problem, t)
             location_cnf = location_exclusion(problem, t)
-            cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + location_cnf + [goal_cnf]
+            cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf] + location_cnf
             
-            print(cnf_to_solve)
+            print('initial state: ' + str(initial_cnf))
+            print('transition states: ' + str(transition_and_exclusion_cnf))
+            print('goal state: ' + str(goal_cnf))
             
             solution_model = logic.pycoSAT(cnf_to_solve)
             print(solution_model)
