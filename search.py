@@ -324,9 +324,6 @@ def positionLogicPlan(problem):
             goal_cnf = goal_sentence(problem, t)
             location_cnf = location_exclusion(problem, t)
             cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf] + location_cnf
-            print('initial state: ' + str(initial_cnf))
-            print('transition states: ' + str(transition_and_exclusion_cnf))
-            print('goal state: ' + str(goal_cnf))
             
             solution_model = logic.pycoSAT(cnf_to_solve)
             # print(solution_model)
