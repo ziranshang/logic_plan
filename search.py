@@ -241,8 +241,8 @@ def positionLogicPlan(problem):
     def generate_successor_transitions(problem, current_state, t_curr, t_max, visited_states):
         transition_list = []
         print(str(t_curr) + ' ' + str(t_max))
-        if t_curr > t_max:
-            return []
+#         if t_curr > t_max:
+#             return []
         
         if current_state in visited_states:
             return []
@@ -268,8 +268,15 @@ def positionLogicPlan(problem):
             visited_states.append(current_state)
             
             transition_list.append(logic.to_cnf(next_state_axiom))
-            transition_list += action_exclusion(problem, problem.actions(current_state), t_curr)
-            transition_list += location_exclusion(problem, t_curr)
+            action_exclusions = action_exclusion(problem, problem.actions(current_state), t_curr)
+            print(action_exclusions)
+            
+            # remove action and location exclusions for now
+            #transition_list += action_exclusions
+            #transition_list += location_exclusion(problem, t_curr)
+            
+            if next_state == problem.getGoalState():
+                continue
             transition_list += generate_successor_transitions(problem, next_state, t_curr + 1, t_max, visited_states)
         
         return transition_list
@@ -317,12 +324,12 @@ def positionLogicPlan(problem):
         for t in range(1, t_max + 1):
             transition_and_exclusion_cnf = transition_models(problem, t)
             goal_cnf = goal_sentence(problem, t)
-            location_cnf = location_exclusion(problem, t)
-            cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf] + location_cnf
+            #location_cnf = location_exclusion(problem, t)
+            cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf]
             
             print('initial state: ' + str(initial_cnf))
             print('transition states: ' + str(transition_and_exclusion_cnf))
-            print('location axioms: ' + str(location_cnf))
+            #print('location axioms: ' + str(location_cnf))
             print('goal state: ' + str(goal_cnf))
             
             solution_model = logic.pycoSAT(cnf_to_solve)
