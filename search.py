@@ -232,7 +232,6 @@ def positionLogicPlan(problem):
     
 
     def transition_models(problem, t):
-<<<<<<< HEAD
         transition_list = [] # list of successor state axioms in cnf
         initial_state = problem.getStartState()
         print "********************"
@@ -242,11 +241,6 @@ def positionLogicPlan(problem):
             print "*******"
             print "ACTION: ", action
             print "TRANSITION LIST: ", transition_list
-=======
-        initial_state = problem.getStartState()
-        transition_list = generate_successor_transitions(problem, initial_state, 0, t, [])
-                
->>>>>>> question_3
         return transition_list
     
     # generate successor state axioms for the next states
@@ -301,21 +295,6 @@ def positionLogicPlan(problem):
     
     # ensure that you cannot be in 2 places at the same time
     def location_exclusion(problem, t):
-<<<<<<< HEAD
-        location_list = []
-        
-        for time in range(0, t + 1):
-            for i in range(1, problem.getWidth() + 1):
-                for j in range(1, problem.getHeight() + 1):
-                    for k in range(1, problem.getWidth() + 1):
-                        for l in range(1, problem.getHeight() + 1):
-                            if not (i == k and j == l):
-                                location_one_symbol = logic.PropSymbolExpr('P', i, j, time)
-                                location_two_symbol = logic.PropSymbolExpr('P', k, l, time)
-                                location_one = logic.Expr(str(location_one_symbol))
-                                location_two = logic.Expr(str(location_two_symbol))
-                                location_list.append(logic.to_cnf(~(location_one & location_two)))
-=======
         location_expression_list = []
 
         for i in range(1, problem.getWidth() + 1):
@@ -324,8 +303,7 @@ def positionLogicPlan(problem):
                 location_expr = logic.Expr(str(location_symbol))
                 location_expression_list.append(location_expr)
                 
-        location_exclusion_list = exactlyOne(location_expression_list)        
->>>>>>> question_3
+        location_exclusion_list = exactlyOne(location_expression_list) 
     
         return [location_exclusion_list]
             
@@ -347,15 +325,10 @@ def positionLogicPlan(problem):
             goal_cnf = goal_sentence(problem, t)
             location_cnf = location_exclusion(problem, t)
             cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf] + location_cnf
-            
-<<<<<<< HEAD
-=======
             print('initial state: ' + str(initial_cnf))
             print('transition states: ' + str(transition_and_exclusion_cnf))
             print('location axioms: ' + str(location_cnf))
             print('goal state: ' + str(goal_cnf))
-            
->>>>>>> question_3
             solution_model = logic.pycoSAT(cnf_to_solve)
             # print(solution_model)
             if not solution_model == False:
