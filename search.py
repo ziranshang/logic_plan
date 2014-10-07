@@ -254,8 +254,8 @@ def positionLogicPlan(problem):
     def generate_successor_transitions(problem, current_state, current_action, t_curr, t_max, visited_states):
         transition_list = []
         print(str(t_curr) + ' ' + str(t_max))
-        #if t_curr >= t_max:
-            #return []
+        if t_curr > t_max:
+            return []
         
         if current_state in visited_states:
             return []
@@ -264,6 +264,9 @@ def positionLogicPlan(problem):
             current_state_symbol = logic.PropSymbolExpr('At', current_state[0], current_state[1], t_curr)
             current_state_expr = logic.Expr(str(current_state_symbol))
             next_state = problem.result(current_state, action)[0]
+        
+            if next_state in visited_states:
+                continue
         
             next_state_symbol = logic.PropSymbolExpr('At', next_state[0], next_state[1], t_curr + 1)
             next_state_expr = logic.Expr(str(next_state_symbol))
