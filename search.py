@@ -240,21 +240,18 @@ def positionLogicPlan(problem):
     # of the form: (next state at time t + 1) iff ((current state at time t) and (action to get to next state at time t))
     def generate_successor_transitions(problem, current_state, t_curr, t_max, visited_states):
         transition_list = []
-        print(str(t_curr) + ' ' + str(t_max))
 #         if t_curr > t_max:
 #             return []
         
         if current_state in visited_states:
             return []
         
-#         if current_state == problem.getGoalState():
-#             return []
-        
         for action in problem.actions(current_state):
             current_state_symbol = logic.PropSymbolExpr('At', current_state[0], current_state[1], t_curr)
             current_state_expr = logic.Expr(str(current_state_symbol))
             next_state = problem.result(current_state, action)[0]
         
+            # if we've already seen the resulting state, don't visit it
             if next_state in visited_states:
                 continue
         
@@ -262,22 +259,26 @@ def positionLogicPlan(problem):
             next_state_expr = logic.Expr(str(next_state_symbol))
             action_symbol = logic.PropSymbolExpr(action, t_curr)
             action_expr = logic.Expr(str(action_symbol))
-            next_state_axiom = ~(next_state_expr ^ (current_state_expr & action_expr))
-            print(next_state_axiom)
-            
+            next_state_axiom = ~(next_state_expr ^ (current_state_expr & action_expr))            
             visited_states.append(current_state)
-            
             transition_list.append(logic.to_cnf(next_state_axiom))
+            
+            # not sure if this should be here, may generate extra axioms in the loop
             action_exclusions = action_exclusion(problem, problem.actions(current_state), t_curr)
-            print(action_exclusions)
             
-            # remove action and location exclusions for now
+            print('successor axiom: ' + str(next_state_axiom))
+            print('action exclusion axiom: ' + str (action_exclusions))
+            
+            # remove action exclusions for now
             #transition_list += action_exclusions
-            #transition_list += location_exclusion(problem, t_curr)
             
+            # if the next state is the goal, don't find its successors
             if next_state == problem.getGoalState():
                 continue
-            transition_list += generate_successor_transitions(problem, next_state, t_curr + 1, t_max, visited_states)
+            
+            transition_list += generate_successor_transitions(problem, next_state, t_curr + 1, t_max, visited_states) # generate successors for the next state
+            
+        transition_list += location_exclusion(problem, t_curr) # add location exclusions for this time step
         
         return transition_list
     
@@ -316,6 +317,7 @@ def positionLogicPlan(problem):
         
         return logic.to_cnf(goal_expr)
         
+    # try to solve the sentence, starting with t = 1 and increasing if no solution is found
     def solve_sentence(problem, t_max):
         initial_state = problem.getStartState() # pacman initial position
         initial_symbol = logic.PropSymbolExpr('At', initial_state[0], initial_state[1], 0)
@@ -324,26 +326,22 @@ def positionLogicPlan(problem):
         for t in range(1, t_max + 1):
             transition_and_exclusion_cnf = transition_models(problem, t)
             goal_cnf = goal_sentence(problem, t)
-            #location_cnf = location_exclusion(problem, t)
             cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf]
+            
+            solution_model = logic.pycoSAT(cnf_to_solve)
             
             print('initial state: ' + str(initial_cnf))
             print('transition states: ' + str(transition_and_exclusion_cnf))
-            #print('location axioms: ' + str(location_cnf))
             print('goal state: ' + str(goal_cnf))
             
-            solution_model = logic.pycoSAT(cnf_to_solve)
-            print(solution_model)
             if not solution_model == False:
                 return solution_model
     
     solution = solve_sentence(problem, MAX_TIME_STEPS) # max 50 time steps 
-    
-    print(solution)
-    
     actions = [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]
     
-    print(extractActionSequence(solution, actions))
+    print('solution model: ' + str(solution))
+    print('solution moves: ' + str(extractActionSequence(solution, actions)))
 
     return extractActionSequence(solution, actions)
     
