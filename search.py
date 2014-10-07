@@ -230,23 +230,17 @@ def positionLogicPlan(problem):
     
     MAX_TIME_STEPS = 50
     
+
     def transition_models(problem, t):
         transition_list = [] # list of successor state axioms in cnf
-        # while time <= t
-        # for each action in valid actions, successor state at t+1 iff action at t and current state at t
-        # do the same for each successor state
-#         for time in range(1, t): # not needed?
-#             for action in problem.actions(problem.getStartState()):
-#                 #TODO: pacman at curr x,y at time t iff at prev x,y and move(prev to curr) is in actions
-#                 next_state = problem.result(problem.getStartState(), action)
-#                 transition_list += generate_successor_transitions(problem, next_state, action, 1, t)
-#                 transition_list += action_exclusion(problem, problem.getStartState().actions(), t) # add exclusions for current valid actions
-        
         initial_state = problem.getStartState()
-
+        print "********************"
+        print "TIME STEP: ", t
         for action in problem.actions(initial_state):
-            transition_list += generate_successor_transitions(problem, initial_state, action, 0, t, [])
-                
+            transition_list += generate_successor_transitions(problem, initial_state, action, 0, t)
+            print "*******"
+            print "ACTION: ", action
+            print "TRANSITION LIST: ", transition_list
         return transition_list
     
     # generate successor state axioms for the next states
@@ -261,8 +255,7 @@ def positionLogicPlan(problem):
             return []
         
         for action in problem.actions(current_state):
-            current_state_symbol = logic.PropSymbolExpr('At', current_state[0], current_state[1], t_curr)
-            current_state_expr = logic.Expr(str(current_state_symbol))
+            current_state_symbol = logic.PropSymbolExpr('P', current_state[0], current_state[1], t_curr)
             next_state = problem.result(current_state, action)[0]
         
             if next_state in visited_states:
@@ -305,8 +298,8 @@ def positionLogicPlan(problem):
                     for k in range(1, problem.getWidth() + 1):
                         for l in range(1, problem.getHeight() + 1):
                             if not (i == k and j == l):
-                                location_one_symbol = logic.PropSymbolExpr('At', i, j, time)
-                                location_two_symbol = logic.PropSymbolExpr('At', k, l, time)
+                                location_one_symbol = logic.PropSymbolExpr('P', i, j, time)
+                                location_two_symbol = logic.PropSymbolExpr('P', k, l, time)
                                 location_one = logic.Expr(str(location_one_symbol))
                                 location_two = logic.Expr(str(location_two_symbol))
                                 location_list.append(logic.to_cnf(~(location_one & location_two)))
@@ -316,42 +309,39 @@ def positionLogicPlan(problem):
     # return goal sentence        
     def goal_sentence(problem, t):
         goal_state = problem.getGoalState()
-        goal_symbol = logic.PropSymbolExpr('At', goal_state[0], goal_state[1], t)
+        goal_symbol = logic.PropSymbolExpr('P', goal_state[0], goal_state[1], t)
         goal_expr = logic.Expr(str(goal_symbol)) # at goal state at time t
         
         return logic.to_cnf(goal_expr)
         
     def solve_sentence(problem, t_max):
         initial_state = problem.getStartState() # pacman initial position
-        initial_symbol = logic.PropSymbolExpr('At', initial_state[0], initial_state[1], 0)
-        initial_cnf = logic.to_cnf(logic.Expr(str(initial_symbol))) # pacman at initial position at time 0
+        initial_symbol = logic.PropSymbolExpr('P', initial_state[0], initial_state[1], 0)
+        initial_cnf = logic.to_cnf(initial_symbol) # pacman at initial position at time
         
         for t in range(1, t_max + 1):
             transition_and_exclusion_cnf = transition_models(problem, t)
             goal_cnf = goal_sentence(problem, t)
             location_cnf = location_exclusion(problem, t)
             cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf] + location_cnf
-            
             print('initial state: ' + str(initial_cnf))
             print('transition states: ' + str(transition_and_exclusion_cnf))
             print('goal state: ' + str(goal_cnf))
             
             solution_model = logic.pycoSAT(cnf_to_solve)
-            print(solution_model)
+            # print(solution_model)
             if not solution_model == False:
                 return solution_model
     
     solution = solve_sentence(problem, MAX_TIME_STEPS) # max 50 time steps 
     
-    print(solution)
+    # print(solution)
     
     actions = [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]
     
-    print(extractActionSequence(solution, actions))
+    # print(extractActionSequence(solution, actions))
 
     return extractActionSequence(solution, actions)
-    
-    util.raiseNotDefined()
 
 
 def foodLogicPlan(problem):
