@@ -231,27 +231,14 @@ def positionLogicPlan(problem):
     MAX_TIME_STEPS = 50
     
     def transition_models(problem, t):
-        transition_list = [] # list of successor state axioms in cnf
-        # while time <= t
-        # for each action in valid actions, successor state at t+1 iff action at t and current state at t
-        # do the same for each successor state
-#         for time in range(1, t): # not needed?
-#             for action in problem.actions(problem.getStartState()):
-#                 #TODO: pacman at curr x,y at time t iff at prev x,y and move(prev to curr) is in actions
-#                 next_state = problem.result(problem.getStartState(), action)
-#                 transition_list += generate_successor_transitions(problem, next_state, action, 1, t)
-#                 transition_list += action_exclusion(problem, problem.getStartState().actions(), t) # add exclusions for current valid actions
-        
         initial_state = problem.getStartState()
-
-        for action in problem.actions(initial_state):
-            transition_list += generate_successor_transitions(problem, initial_state, action, 0, t, [])
+        transition_list = generate_successor_transitions(problem, initial_state, 0, t, [])
                 
         return transition_list
     
     # generate successor state axioms for the next states
     # of the form: (next state at time t + 1) iff ((current state at time t) and (action to get to next state at time t))
-    def generate_successor_transitions(problem, current_state, current_action, t_curr, t_max, visited_states):
+    def generate_successor_transitions(problem, current_state, t_curr, t_max, visited_states):
         transition_list = []
         print(str(t_curr) + ' ' + str(t_max))
         if t_curr > t_max:
@@ -259,6 +246,9 @@ def positionLogicPlan(problem):
         
         if current_state in visited_states:
             return []
+        
+#         if current_state == problem.getGoalState():
+#             return []
         
         for action in problem.actions(current_state):
             current_state_symbol = logic.PropSymbolExpr('At', current_state[0], current_state[1], t_curr)
@@ -279,7 +269,8 @@ def positionLogicPlan(problem):
             
             transition_list.append(logic.to_cnf(next_state_axiom))
             transition_list += action_exclusion(problem, problem.actions(current_state), t_curr)
-            transition_list += generate_successor_transitions(problem, next_state, action, t_curr + 1, t_max, visited_states)
+            transition_list += location_exclusion(problem, t_curr)
+            transition_list += generate_successor_transitions(problem, next_state, t_curr + 1, t_max, visited_states)
         
         return transition_list
     
@@ -292,26 +283,23 @@ def positionLogicPlan(problem):
             action_expr = logic.Expr(str(action_symbol))
             action_expression_list.append(action_expr)
             
-        exclusion_list = exactlyOne(action_expression_list)
-        return [exclusion_list]
+        action_exclusion_list = exactlyOne(action_expression_list)
+        
+        return [action_exclusion_list]
     
     # ensure that you cannot be in 2 places at the same time
     def location_exclusion(problem, t):
-        location_list = []
-        
-        for time in range(0, t + 1):
-            for i in range(1, problem.getWidth() + 1):
-                for j in range(1, problem.getHeight() + 1):
-                    for k in range(1, problem.getWidth() + 1):
-                        for l in range(1, problem.getHeight() + 1):
-                            if not (i == k and j == l):
-                                location_one_symbol = logic.PropSymbolExpr('At', i, j, time)
-                                location_two_symbol = logic.PropSymbolExpr('At', k, l, time)
-                                location_one = logic.Expr(str(location_one_symbol))
-                                location_two = logic.Expr(str(location_two_symbol))
-                                location_list.append(logic.to_cnf(~(location_one & location_two)))
+        location_expression_list = []
+
+        for i in range(1, problem.getWidth() + 1):
+            for j in range(1, problem.getHeight() + 1):
+                location_symbol = logic.PropSymbolExpr('At', i, j, t)
+                location_expr = logic.Expr(str(location_symbol))
+                location_expression_list.append(location_expr)
+                
+        location_exclusion_list = exactlyOne(location_expression_list)        
     
-        return location_list
+        return [location_exclusion_list]
             
     # return goal sentence        
     def goal_sentence(problem, t):
@@ -334,6 +322,7 @@ def positionLogicPlan(problem):
             
             print('initial state: ' + str(initial_cnf))
             print('transition states: ' + str(transition_and_exclusion_cnf))
+            print('location axioms: ' + str(location_cnf))
             print('goal state: ' + str(goal_cnf))
             
             solution_model = logic.pycoSAT(cnf_to_solve)
