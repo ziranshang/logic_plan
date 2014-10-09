@@ -150,18 +150,7 @@ def atLeastOne(expressions) :
     True
     """
     "*** YOUR CODE HERE ***"
-    
-    if len(expressions) <= 1:
-        return expressions[0]
-    
-    expression_to_return = expressions[0]
-
-    for i in range(len(expressions)):
-        if i == 0:
-            continue
-        expression_to_return = expression_to_return | expressions[i]
-    
-    return expression_to_return
+    return reduce(lambda x, y: x | y, expressions)
 
 
 def atMostOne(expressions) :
@@ -194,8 +183,6 @@ def exactlyOne(expressions) :
     "*** YOUR CODE HERE ***"
     
     return atMostOne(expressions) & atLeastOne(expressions)
-    
-    util.raiseNotDefined()
 
 
 def extractActionSequence(model, actions):
@@ -212,7 +199,7 @@ def extractActionSequence(model, actions):
     """
     "*** YOUR CODE HERE ***"
     plan = []
-    for i in range(len(model.keys())): #TODO: check if I can simplify the possibilities of times...
+    for i in range(50): #Assume MAX_TIME_STEPS = 50
         for action in actions:
             action_step = str(action) + "[" + str(i) + "]"
             if logic.PropSymbolExpr(action_step) in model.keys() and model[logic.PropSymbolExpr(action_step)]:
@@ -227,122 +214,197 @@ def positionLogicPlan(problem):
     Note that STOP is not an available action.
     """
     "*** YOUR CODE HERE ***"
-    
-    MAX_TIME_STEPS = 50
-    
+    def transition_models(problem, beginning, end, actions):
+        """
+        Most important function, writes axioms about our fluents
+        """
+        models = []
+        for time in range(beginning, end):
+            for i in range(problem.getWidth()):
+                for j in range(problem.getHeight()):
+                    current_symbol = logic.PropSymbolExpr('P', i, j, time)
+                    not_wall_symbol = ~logic.PropSymbolExpr('W', i, j)
+                    expressions = []
+                    for action in problem.actions:
+                        if action == Directions.EAST:
+                            previous_not_wall_symbol = ~logic.PropSymbolExpr('W', i-1, j)
+                            previous_symbol = logic.PropSymbolExpr('P', i-1, j, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        elif action == Directions.WEST:
+                            previous_not_wall_symbol = ~logic.PropSymbolExpr('W', i+1, j)
+                            previous_symbol = logic.PropSymbolExpr('P', i+1, j, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        elif action == Directions.NORTH:
+                            previous_not_wall_symbol = ~logic.PropSymbolExpr('W', i, j-1)
+                            previous_symbol = logic.PropSymbolExpr('P', i, j-1, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        elif action == Directions.SOUTH:
+                            previous_not_wall_symbol = ~logic.PropSymbolExpr('W', i, j+1)
+                            previous_symbol = logic.PropSymbolExpr('P', i, j+1, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        # NOTE: SHOULD NOT NEED TO STOP!
+                        # elif action == Directions.STOP:
+                        #     pass
+                    models.append(logic.to_cnf(current_symbol % (not_wall_symbol ^ atLeastOne(expressions)))) # % means <=>, this is VERY UGLY
+        return models
 
-    def transition_models(problem, t):
-        transition_list = [] # list of successor state axioms in cnf
-        initial_state = problem.getStartState()
-        print "********************"
-        print "TIME STEP: ", t
-        for action in problem.actions(initial_state):
-            transition_list += generate_successor_transitions(problem, initial_state, action, 0, t)
-            print "*******"
-            print "ACTION: ", action
-            print "TRANSITION LIST: ", transition_list
-        return transition_list
-    
-    # generate successor state axioms for the next states
-    # of the form: (next state at time t + 1) iff ((current state at time t) and (action to get to next state at time t))
-    def generate_successor_transitions(problem, current_state, t_curr, t_max, visited_states):
-        transition_list = []
-        print(str(t_curr) + ' ' + str(t_max))
-        if t_curr > t_max:
-            return []
-        
-        if current_state in visited_states:
-            return []
-        
-#         if current_state == problem.getGoalState():
-#             return []
-        
-        for action in problem.actions(current_state):
-            current_state_symbol = logic.PropSymbolExpr('P', current_state[0], current_state[1], t_curr)
-            next_state = problem.result(current_state, action)[0]
-        
-            if next_state in visited_states:
-                continue
-        
-            next_state_symbol = logic.PropSymbolExpr('At', next_state[0], next_state[1], t_curr + 1)
-            next_state_expr = logic.Expr(str(next_state_symbol))
-            action_symbol = logic.PropSymbolExpr(action, t_curr)
-            action_expr = logic.Expr(str(action_symbol))
-            next_state_axiom = ~(next_state_expr ^ (current_state_expr & action_expr))
-            print(next_state_axiom)
-            
-            visited_states.append(current_state)
-            
-            transition_list.append(logic.to_cnf(next_state_axiom))
-            transition_list += action_exclusion(problem, problem.actions(current_state), t_curr)
-            transition_list += location_exclusion(problem, t_curr)
-            transition_list += generate_successor_transitions(problem, next_state, t_curr + 1, t_max, visited_states)
-        
-        return transition_list
-    
-    # for all pairs of legal actions at a given time, ensure that you can only do one action at that time
-    def action_exclusion(problem, actions, t):
-        action_expression_list = []
-        
-        for action in actions:
-            action_symbol = logic.PropSymbolExpr(action, t)
-            action_expr = logic.Expr(str(action_symbol))
-            action_expression_list.append(action_expr)
-            
-        action_exclusion_list = exactlyOne(action_expression_list)
-        
-        return [action_exclusion_list]
-    
-    # ensure that you cannot be in 2 places at the same time
-    def location_exclusion(problem, t):
-        location_expression_list = []
+    def initial_models(problem):
+        initial_state = problem.getStartState() # pacman initial position
+        models = [logic.PropSymbolExpr('P', initial_state[0], initial_state[1], 0)] # pacman at initial position at time 0
+        walls = problem.walls
+        width = problem.getWidth() + 2 #walls surround original grid
+        height = problem.getHeight() + 2
+        for i in range(-1, width-1): #wall grid begins from -1!
+            for j in range(-1, height-1):
+                if walls[i][j]:
+                    models.append(logic.PropSymbolExpr('W', i, j))
+                else:
+                    models.append(~logic.PropSymbolExpr('W', i, j))
+        return models
 
-        for i in range(1, problem.getWidth() + 1):
-            for j in range(1, problem.getHeight() + 1):
-                location_symbol = logic.PropSymbolExpr('At', i, j, t)
-                location_expr = logic.Expr(str(location_symbol))
-                location_expression_list.append(location_expr)
-                
-        location_exclusion_list = exactlyOne(location_expression_list) 
-    
-        return [location_exclusion_list]
-            
-    # return goal sentence        
     def goal_sentence(problem, t):
         goal_state = problem.getGoalState()
-        goal_symbol = logic.PropSymbolExpr('P', goal_state[0], goal_state[1], t)
-        goal_expr = logic.Expr(str(goal_symbol)) # at goal state at time t
-        
-        return logic.to_cnf(goal_expr)
-        
-    def solve_sentence(problem, t_max):
-        initial_state = problem.getStartState() # pacman initial position
-        initial_symbol = logic.PropSymbolExpr('P', initial_state[0], initial_state[1], 0)
-        initial_cnf = logic.to_cnf(initial_symbol) # pacman at initial position at time
-        
-        for t in range(1, t_max + 1):
-            transition_and_exclusion_cnf = transition_models(problem, t)
-            goal_cnf = goal_sentence(problem, t)
-            location_cnf = location_exclusion(problem, t)
-            cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf] + location_cnf
-            print('initial state: ' + str(initial_cnf))
-            print('transition states: ' + str(transition_and_exclusion_cnf))
-            print('location axioms: ' + str(location_cnf))
-            print('goal state: ' + str(goal_cnf))
-            solution_model = logic.pycoSAT(cnf_to_solve)
-            # print(solution_model)
-            if not solution_model == False:
-                return solution_model
-    
-    solution = solve_sentence(problem, MAX_TIME_STEPS) # max 50 time steps 
-    
-    # print(solution)
-    
-    actions = [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]
-    
-    # print(extractActionSequence(solution, actions))
+        return [logic.PropSymbolExpr('P', goal_state[0], goal_state[1], t)]
 
-    return extractActionSequence(solution, actions)
+    # def precondition_axioms(problem, actions):
+    
+    def action_exclusion_axioms(actions, max_time):
+        axioms = []
+        for i in range(max_time):
+            expressions = []
+            for action in actions:
+                expressions.append(logic.PropSymbolExpr(action, t))
+            axioms.append(exactlyOne(expressions))
+        return axioms
+
+    
+    MAX_TIME_STEPS = 50
+    # actions = [Directions.NORTH, Directions.EAST, Directions.SOUTH, Directions.WEST, Directions.STOP]
+    actions = [Directions.NORTH, Directions.EAST, Directions.SOUTH, Directions.WEST]
+    initial_models = initial_models(problem)
+    successor_state_axioms = transition_models(problem, 1, MAX_TIME_STEPS, actions)
+    action_exclusion_axioms = action_exclusion_axioms(actions, MAX_TIME_STEPS)
+
+    for t in range(MAX_TIME_STEPS):
+        goal_assertion = goal_sentence(problem, t)
+        solution_model = logic.pycoSAT(initial_models + successor_state_axioms + goal_assertion + action_exclusion_axioms)
+        if solution_model:
+            extractActionSequence(solution_model, actions)
+    
+#     def transition_models(problem, t):
+#         initial_state = problem.getStartState()
+#         transition_list = generate_successor_transitions(problem, initial_state, 0, t, [])
+                
+#         return transition_list
+    
+#     # generate successor state axioms for the next states
+#     # of the form: (next state at time t + 1) iff ((current state at time t) and (action to get to next state at time t))
+#     def generate_successor_transitions(problem, current_state, t_curr, t_max, visited_states):
+#         transition_list = []
+# #         if t_curr > t_max:
+# #             return []
+        
+#         if current_state in visited_states:
+#             return []
+        
+#         for action in problem.actions(current_state):
+#             current_state_symbol = logic.PropSymbolExpr('At', current_state[0], current_state[1], t_curr)
+#             current_state_expr = logic.Expr(str(current_state_symbol))
+#             next_state = problem.result(current_state, action)[0]
+        
+#             # if we've already seen the resulting state, don't visit it
+#             if next_state in visited_states:
+#                 continue
+        
+#             next_state_symbol = logic.PropSymbolExpr('At', next_state[0], next_state[1], t_curr + 1)
+#             next_state_expr = logic.Expr(str(next_state_symbol))
+#             action_symbol = logic.PropSymbolExpr(action, t_curr)
+#             action_expr = logic.Expr(str(action_symbol))
+#             next_state_axiom = next_state_expr % (current_state_expr & action_expr)           
+#             visited_states.append(current_state)
+#             transition_list.append(logic.to_cnf(next_state_axiom))
+            
+#             # not sure if this should be here, may generate extra axioms in the loop
+#             action_exclusions = action_exclusion(problem, problem.actions(current_state), t_curr)
+            
+#             print('successor axiom: ' + str(next_state_axiom))
+#             print('action exclusion axiom: ' + str (action_exclusions))
+            
+#             # remove action exclusions for now
+#             #transition_list += action_exclusions
+            
+#             # if the next state is the goal, don't find its successors
+#             if next_state == problem.getGoalState():
+#                 continue
+            
+#             transition_list += generate_successor_transitions(problem, next_state, t_curr + 1, t_max, visited_states) # generate successors for the next state
+            
+#         transition_list += location_exclusion(problem, t_curr) # add location exclusions for this time step
+        
+#         return transition_list
+    
+#     # for all pairs of legal actions at a given time, ensure that you can only do one action at that time
+#     def action_exclusion(problem, actions, t):
+#         action_expression_list = []
+        
+#         for action in actions:
+#             action_symbol = logic.PropSymbolExpr(action, t)
+#             action_expr = logic.Expr(str(action_symbol))
+#             action_expression_list.append(action_expr)
+            
+#         action_exclusion_list = exactlyOne(action_expression_list)
+        
+#         return [action_exclusion_list]
+    
+#     # ensure that you cannot be in 2 places at the same time
+#     def location_exclusion(problem, t):
+#         location_expression_list = []
+
+#         for i in range(1, problem.getWidth() + 1):
+#             for j in range(1, problem.getHeight() + 1):
+#                 location_symbol = logic.PropSymbolExpr('At', i, j, t)
+#                 location_expr = logic.Expr(str(location_symbol))
+#                 location_expression_list.append(location_expr)
+                
+#         location_exclusion_list = exactlyOne(location_expression_list)        
+    
+#         return [location_exclusion_list]
+            
+#     # return goal sentence        
+#     def goal_sentence(problem, t):
+#         goal_state = problem.getGoalState()
+#         goal_symbol = logic.PropSymbolExpr('At', goal_state[0], goal_state[1], t)
+#         goal_expr = logic.Expr(str(goal_symbol)) # at goal state at time t
+        
+#         return logic.to_cnf(goal_expr)
+        
+#     # try to solve the sentence, starting with t = 1 and increasing if no solution is found
+#     def solve_sentence(problem, t_max):
+#         initial_state = problem.getStartState() # pacman initial position
+#         initial_symbol = logic.PropSymbolExpr('At', initial_state[0], initial_state[1], 0)
+#         initial_cnf = logic.to_cnf(logic.Expr(str(initial_symbol))) # pacman at initial position at time 0
+        
+#         for t in range(1, t_max + 1):
+#             transition_and_exclusion_cnf = transition_models(problem, t)
+#             goal_cnf = goal_sentence(problem, t)
+#             cnf_to_solve = [initial_cnf] + transition_and_exclusion_cnf + [goal_cnf]
+            
+#             solution_model = logic.pycoSAT(cnf_to_solve)
+            
+#             print('initial state: ' + str(initial_cnf))
+#             print('transition states: ' + str(transition_and_exclusion_cnf))
+#             print('goal state: ' + str(goal_cnf))
+            
+#             if not solution_model == False:
+#                 return solution_model
+    
+#     solution = solve_sentence(problem, MAX_TIME_STEPS) # max 50 time steps 
+#     actions = [Directions.NORTH, Directions.SOUTH, Directions.EAST, Directions.WEST]
+    
+#     print('solution model: ' + str(solution))
+#     print('solution moves: ' + str(extractActionSequence(solution, actions)))
+
+#     return extractActionSequence(solution, actions)
 
 
 def foodLogicPlan(problem):
