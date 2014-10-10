@@ -160,7 +160,6 @@ def atMostOne(expressions) :
     that represents the logic that at most one of the expressions in the list is true.
     """
     "*** YOUR CODE HERE ***"
-
     if len(expressions) <= 1:
         return expressions[0]
 
@@ -182,7 +181,6 @@ def exactlyOne(expressions) :
     that represents the logic that exactly one of the expressions in the list is true.
     """
     "*** YOUR CODE HERE ***"
-    
     return atMostOne(expressions) & atLeastOne(expressions)
 
 
@@ -200,17 +198,252 @@ def extractActionSequence(model, actions):
     """
     "*** YOUR CODE HERE ***"
     plan = []
-    for i in range(50): #Assume MAX_TIME_STEPS = 50
+    for i in xrange(50): #Assume MAX_TIME_STEPS = 50
         for action in actions:
             action_step = str(action) + "[" + str(i) + "]"
             if logic.PropSymbolExpr(action_step) in model.keys() and model[logic.PropSymbolExpr(action_step)]:
                 plan.append(action)
     return plan
 
+def transition_models(problem, time, actions, legal_actions):
+    """
+    Most important function, writes axioms about our fluents
+    """
+    models = []
+    for i in xrange(1, problem.getWidth()+1):
+        for j in xrange(1, problem.getHeight()+1):
+            if not problem.isWall((i, j)):
+                current_symbol = logic.PropSymbolExpr('P', i, j, time)
+                expressions = []
+                for action in actions:
+                    previous_symbol = None
+                    action_symbol = None
+                    if action == Directions.EAST:
+                        if (i-1, j, action) in legal_actions:
+                            previous_symbol = logic.PropSymbolExpr('P', i-1, j, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        else: continue
+                    elif action == Directions.WEST:
+                        if (i+1, j, action) in legal_actions:
+                            previous_symbol = logic.PropSymbolExpr('P', i+1, j, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        else: continue
+                    elif action == Directions.NORTH:
+                        if (i, j-1, action) in legal_actions:
+                            previous_symbol = logic.PropSymbolExpr('P', i, j-1, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        else: continue
+                    elif action == Directions.SOUTH:
+                        if (i, j+1, action) in legal_actions:
+                            previous_symbol = logic.PropSymbolExpr('P', i, j+1, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        else: continue
+                        # NOTE: SHOULD NOT NEED TO STOP!
+                        # elif action == Directions.STOP:
+                        #     pass
+                    expressions.append(previous_symbol & action_symbol)
+            models.append(logic.to_cnf(current_symbol  % atLeastOne(expressions))) # % means <=>, this is VERY UGLY
+    return models
+
+def get_initial_models(problem):
+    initial_state = problem.getStartState() # pacman initial position
+    models = [logic.PropSymbolExpr('P', initial_state[0], initial_state[1], 0)] # pacman at initial position at time 0
+    walls = problem.walls
+    width = problem.getWidth() + 2 #walls surround original grid
+    height = problem.getHeight() + 2
+    for i in xrange(width):
+        for j in xrange(height):
+            if i >= 1 and j >= 1 and i <=width-1 and j <= height-1:
+                if i is not initial_state[0] or j is not initial_state[1]:
+                    if walls[i][j]:
+                        models.append(logic.PropSymbolExpr('W', i, j))
+                    else:
+                        models.append(~logic.PropSymbolExpr('W', i, j))
+                    not_start_state = ~logic.PropSymbolExpr('P', i, j, 0)
+                    models.append(not_start_state)
+            else:
+                if walls[i][j]:
+                    models.append(logic.PropSymbolExpr('W', i, j))
+                else:
+                    models.append(~logic.PropSymbolExpr('W', i, j))
+    return models
+
+def goal_sentence(problem, t):
+    goal_state = problem.getGoalState()
+    goal_sentence = logic.PropSymbolExpr('P', goal_state[0], goal_state[1], t)
+    return [goal_sentence]    
+def create_action_exclusion_axioms(actions, time):
+    expressions = []
+    for action in actions:
+        expressions.append(logic.PropSymbolExpr(action, time))
+    return [exactlyOne(expressions)]
+
 
 def positionLogicPlan(problem):
     """
     Given an instance of a PositionSearchProblem, return a list of actions that lead to the goal.
+    Available actions are game.Directions.{NORTH,SOUTH,EAST,WEST}
+    Note that STOP is not an available action.
+    """
+    "*** YOUR CODE HERE ***"
+    
+    MAX_TIME_STEPS = 50
+    actions = [Directions.NORTH, Directions.EAST, Directions.SOUTH, Directions.WEST]
+    initial_models = get_initial_models(problem)
+    successor_state_axioms = []
+    action_exclusion_axioms = []
+    legal_actions = set()
+    for x in xrange(1, problem.getWidth()+1):
+        for y in xrange(1, problem.getHeight()+1):
+            if not problem.isWall((x, y)):
+                for action in problem.actions((x, y)):
+                    legal_actions.add((x, y, action))
+    for t in xrange(MAX_TIME_STEPS):
+        goal_assertion = goal_sentence(problem, t)
+        if t > 0:
+            successor_state_axioms += transition_models(problem, t, actions, legal_actions)
+            action_exclusion_axioms += create_action_exclusion_axioms(actions, t-1)
+        solution_model = logic.pycoSAT(initial_models + successor_state_axioms + goal_assertion + action_exclusion_axioms)
+        if solution_model is not False:
+            return extractActionSequence(solution_model, actions)
+    return None
+
+def get_food_initial_models(problem):
+    initial_state = problem.getStartState() # pacman initial position
+    models = [logic.PropSymbolExpr('P', initial_state[0][0], initial_state[0][1], 0)] # pacman at initial position at time 0
+    walls = problem.walls
+    width = problem.getWidth() + 2 #walls surround original grid
+    height = problem.getHeight() + 2
+    for i in xrange(width):
+        for j in xrange(height):
+            if i >= 1 and j >= 1 and i <=width-1 and j <= height-1:
+                if i is not initial_state[0] or j is not initial_state[1]:
+                    if walls[i][j]:
+                        models.append(logic.PropSymbolExpr('W', i, j))
+                    else:
+                        models.append(~logic.PropSymbolExpr('W', i, j))
+                    not_start_state = ~logic.PropSymbolExpr('P', i, j, 0)
+                    models.append(not_start_state)
+            else:
+                if walls[i][j]:
+                    models.append(logic.PropSymbolExpr('W', i, j))
+                else:
+                    models.append(~logic.PropSymbolExpr('W', i, j))
+    print "INITIAL_MODELS: ", models
+    return models
+
+def get_food_axioms(problem, max_time):
+        # width = problem.getWidth() + 2 #walls surround original grid
+        # height = problem.getHeight() + 2
+        models = []
+        food_list = problem.getStartState()[1].asList()
+        for food in food_list:
+            expressions = []
+            for t in xrange(max_time):
+                expressions.append(logic.PropSymbolExpr("P", food[0], food[1], t))
+            position_sentences = atLeastOne(expressions)
+        # for i in xrange(1, width-1):
+        #     for j in xrange(1, height-1):
+        #         expressions.append(logic.PropSymbolExpr('P', i, j, time))
+        # position_sentences = atLeastOne(expressions)
+        
+            before_cnf = position_sentences % ~logic.PropSymbolExpr("F", food[0], food[1])
+            print "FOOD AXIOMS: ", before_cnf
+            models.append(logic.to_cnf(before_cnf))
+        return models
+
+def food_goal_sentence(problem):
+        goal = []
+        food_list = problem.getStartState()[1].asList()
+        for food in food_list:
+            goal.append(~logic.PropSymbolExpr("F", food[0], food[1]))
+        # goal_state = problem.getGoalState()
+        # goal_sentence = logic.PropSymbolExpr('P', goal_state[0], goal_state[1], t)
+        print "GOAL: ", goal
+        return goal
+
+def food_transition_models(problem, time, actions, legal_actions):
+    """
+    Most important function, writes axioms about our fluents
+    """
+    models = []
+    for i in xrange(1, problem.getWidth()+1):
+        for j in xrange(1, problem.getHeight()+1):
+            if not problem.isWall((i, j)):
+                current_symbol = logic.PropSymbolExpr('P', i, j, time)
+                expressions = []
+                for action in actions:
+                    previous_symbol = None
+                    action_symbol = None
+                    if action == Directions.EAST:
+                        if (i-1, j, action) in legal_actions:
+                            previous_symbol = logic.PropSymbolExpr('P', i-1, j, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        else: continue
+                    elif action == Directions.WEST:
+                        if (i+1, j, action) in legal_actions:
+                            previous_symbol = logic.PropSymbolExpr('P', i+1, j, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        else: continue
+                    elif action == Directions.NORTH:
+                        if (i, j-1, action) in legal_actions:
+                            previous_symbol = logic.PropSymbolExpr('P', i, j-1, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        else: continue
+                    elif action == Directions.SOUTH:
+                        if (i, j+1, action) in legal_actions:
+                            previous_symbol = logic.PropSymbolExpr('P', i, j+1, time-1)
+                            action_symbol = logic.PropSymbolExpr(action, time-1)
+                        else: continue
+                        # NOTE: SHOULD NOT NEED TO STOP!
+                        # elif action == Directions.STOP:
+                        #     pass
+                    expressions.append(previous_symbol & action_symbol)
+            models.append(logic.to_cnf(current_symbol  % atLeastOne(expressions))) # % means <=>, this is VERY UGLY
+    return models
+
+def foodLogicPlan(problem):
+    """
+    Given an instance of a FoodSearchProblem, return a list of actions that help Pacman
+    eat all of the food.
+    Available actions are game.Directions.{NORTH,SOUTH,EAST,WEST}
+    Note that STOP is not an available action.
+    """
+    "*** YOUR CODE HERE ***"
+    
+    MAX_TIME_STEPS = 50
+    actions = [Directions.NORTH, Directions.EAST, Directions.SOUTH, Directions.WEST]
+    initial_models = get_food_initial_models(problem)
+    successor_state_axioms = []
+    action_exclusion_axioms = []
+    food_axioms = get_food_axioms(problem, MAX_TIME_STEPS)
+    goal_assertion = food_goal_sentence(problem)
+    # food_list = problem.getStartState()[1].asList()
+    legal_actions = set()
+    for x in xrange(1, problem.getWidth()+1):
+        for y in xrange(1, problem.getHeight()+1):
+            if not problem.isWall((x, y)):
+                for action in problem.actions(((x, y), problem.getStartState()[1])):
+                    legal_actions.add((x, y, action))
+    for t in xrange(MAX_TIME_STEPS):
+        if t > 0:
+            successor_state_axioms += food_transition_models(problem, t, actions, legal_actions)
+            action_exclusion_axioms += create_action_exclusion_axioms(actions, t-1)
+        print "initial: ", initial_models
+        print "successors: ", successor_state_axioms
+        sentence = initial_models + successor_state_axioms + goal_assertion + action_exclusion_axioms + food_axioms
+        solution_model = logic.pycoSAT(sentence)
+
+        if solution_model is not False:
+            return extractActionSequence(solution_model, actions)
+    return None
+
+def foodGhostLogicPlan(problem):
+    """
+    Given an instance of a FoodGhostSearchProblem, return a list of actions that help Pacman
+    eat all of the food and avoid patrolling ghosts.
+    Ghosts only move east and west. They always start by moving East, unless they start next to
+    and eastern wall. 
     Available actions are game.Directions.{NORTH,SOUTH,EAST,WEST}
     Note that STOP is not an available action.
     """
@@ -308,29 +541,6 @@ def positionLogicPlan(problem):
         if solution_model is not False:
             return extractActionSequence(solution_model, actions)
     return None
-
-
-def foodLogicPlan(problem):
-    """
-    Given an instance of a FoodSearchProblem, return a list of actions that help Pacman
-    eat all of the food.
-    Available actions are game.Directions.{NORTH,SOUTH,EAST,WEST}
-    Note that STOP is not an available action.
-    """
-    "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
-
-def foodGhostLogicPlan(problem):
-    """
-    Given an instance of a FoodGhostSearchProblem, return a list of actions that help Pacman
-    eat all of the food and avoid patrolling ghosts.
-    Ghosts only move east and west. They always start by moving East, unless they start next to
-    and eastern wall. 
-    Available actions are game.Directions.{NORTH,SOUTH,EAST,WEST}
-    Note that STOP is not an available action.
-    """
-    "*** YOUR CODE HERE ***"
-    util.raiseNotDefined()
 
 
 # Abbreviations
