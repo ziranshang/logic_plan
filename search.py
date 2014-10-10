@@ -253,7 +253,7 @@ def positionLogicPlan(problem):
                 models.append(logic.to_cnf((current_symbol & not_wall_symbol) % atLeastOne(expressions))) # % means <=>, this is VERY UGLY
         return models
 
-    def initial_models(problem, set):
+    def initial_models(problem):
         initial_state = problem.getStartState() # pacman initial position
         models = [logic.PropSymbolExpr('P', initial_state[0], initial_state[1], 0)] # pacman at initial position at time 0
         walls = problem.walls
@@ -304,7 +304,9 @@ def positionLogicPlan(problem):
         print "t: ", t
         goal_assertion = goal_sentence(problem, t)
         if t > 0:
+            print "TRANSITION MODEL ALGORITHM BEGIN"
             successor_state_axioms += transition_models(problem, t, actions)
+            print "TRANSITION MODEL ALGORITHM FINISH"
             action_exclusion_axioms += create_action_exclusion_axioms(actions, t-1)
         solution_model = logic.pycoSAT(initial_models + successor_state_axioms + goal_assertion + action_exclusion_axioms)
         if solution_model is not False:
