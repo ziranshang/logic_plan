@@ -317,7 +317,7 @@ def get_food_initial_models(problem):
     for i in xrange(width):
         for j in xrange(height):
             if i >= 1 and j >= 1 and i <=width-1 and j <= height-1:
-                if i is not initial_state[0] or j is not initial_state[1]:
+                if i is not initial_state[0][0] or j is not initial_state[0][1]:
                     if walls[i][j]:
                         models.append(logic.PropSymbolExpr('W', i, j))
                     else:
@@ -329,7 +329,6 @@ def get_food_initial_models(problem):
                     models.append(logic.PropSymbolExpr('W', i, j))
                 else:
                     models.append(~logic.PropSymbolExpr('W', i, j))
-    print "INITIAL_MODELS: ", models
     return models
 
 def get_food_axioms(problem, max_time):
@@ -348,7 +347,7 @@ def get_food_axioms(problem, max_time):
         # position_sentences = atLeastOne(expressions)
         
             before_cnf = position_sentences % ~logic.PropSymbolExpr("F", food[0], food[1])
-            print "FOOD AXIOMS: ", before_cnf
+            # print "FOOD AXIOMS: ", before_cnf
             models.append(logic.to_cnf(before_cnf))
         return models
 
@@ -361,7 +360,7 @@ def food_goal_sentence(problem, time):
         for position in food_list:
             expressions.append(logic.PropSymbolExpr("P", food[0], food[1], time))
         goal.append(atLeastOne(expressions))
-        print "GOAL: ", goal
+        # print "GOAL: ", goal
         return goal
 
 def food_transition_models(problem, time, actions, legal_actions):
@@ -427,6 +426,7 @@ def foodLogicPlan(problem):
                 for action in problem.actions(((x, y), problem.getStartState()[1])):
                     legal_actions.add((x, y, action))
     for t in xrange(MAX_TIME_STEPS):
+        print "t: ", t
         goal_assertion = food_goal_sentence(problem, t)
         if t > 0:
             successor_state_axioms += food_transition_models(problem, t, actions, legal_actions)
@@ -437,7 +437,9 @@ def foodLogicPlan(problem):
         solution_model = logic.pycoSAT(sentence)
 
         if solution_model is not False:
-            return extractActionSequence(solution_model, actions)
+            actions = extractActionSequence(solution_model, actions)
+            print actions
+            return actions
     return None
 
 def foodGhostLogicPlan(problem):
