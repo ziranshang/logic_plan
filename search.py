@@ -215,42 +215,44 @@ def positionLogicPlan(problem):
     Note that STOP is not an available action.
     """
     "*** YOUR CODE HERE ***"
-    def transition_models(problem, time, actions):
+    def transition_models(problem, time, actions, legal_actions):
         """
         Most important function, writes axioms about our fluents
         """
         models = []
-        for i in range(1, problem.getWidth()+1):
-            for j in range(1, problem.getHeight()+1):
-                current_symbol = logic.PropSymbolExpr('P', i, j, time)
-                not_wall_symbol = ~logic.PropSymbolExpr('W', i, j)
-                expressions = []
-                for action in actions:
-                    previous_not_wall_symbol = None
-                    previous_symbol = None
-                    action_symbol = None
-                    if action == Directions.EAST:
-                        previous_not_wall_symbol = ~logic.PropSymbolExpr('W', i-1, j)
-                        previous_symbol = logic.PropSymbolExpr('P', i-1, j, time-1)
-                        action_symbol = logic.PropSymbolExpr(action, time-1)
-                    elif action == Directions.WEST:
-                        previous_not_wall_symbol = ~logic.PropSymbolExpr('W', i+1, j)
-                        previous_symbol = logic.PropSymbolExpr('P', i+1, j, time-1)
-                        action_symbol = logic.PropSymbolExpr(action, time-1)
-                    elif action == Directions.NORTH:
-                        previous_not_wall_symbol = ~logic.PropSymbolExpr('W', i, j-1)
-                        previous_symbol = logic.PropSymbolExpr('P', i, j-1, time-1)
-                        action_symbol = logic.PropSymbolExpr(action, time-1)
-                    elif action == Directions.SOUTH:
-                        previous_not_wall_symbol = ~logic.PropSymbolExpr('W', i, j+1)
-                        previous_symbol = logic.PropSymbolExpr('P', i, j+1, time-1)
-                        action_symbol = logic.PropSymbolExpr(action, time-1)
-                    # NOTE: SHOULD NOT NEED TO STOP!
-                    # elif action == Directions.STOP:
-                    #     pass
-                    expressions.append(previous_symbol & previous_not_wall_symbol & action_symbol)
-                    # expressions.append(previous_symbol & action_symbol)
-                models.append(logic.to_cnf((current_symbol & not_wall_symbol) % atLeastOne(expressions))) # % means <=>, this is VERY UGLY
+        for i in xrange(1, problem.getWidth()+1):
+            for j in xrange(1, problem.getHeight()+1):
+                if not problem.isWall((i, j)):
+                    current_symbol = logic.PropSymbolExpr('P', i, j, time)
+                    expressions = []
+                    for action in actions:
+                        previous_symbol = None
+                        action_symbol = None
+                        if action == Directions.EAST:
+                            if (i-1, j, action) in legal_actions:
+                                previous_symbol = logic.PropSymbolExpr('P', i-1, j, time-1)
+                                action_symbol = logic.PropSymbolExpr(action, time-1)
+                            else: continue
+                        elif action == Directions.WEST:
+                            if (i+1, j, action) in legal_actions:
+                                previous_symbol = logic.PropSymbolExpr('P', i+1, j, time-1)
+                                action_symbol = logic.PropSymbolExpr(action, time-1)
+                            else: continue
+                        elif action == Directions.NORTH:
+                            if (i, j-1, action) in legal_actions:
+                                previous_symbol = logic.PropSymbolExpr('P', i, j-1, time-1)
+                                action_symbol = logic.PropSymbolExpr(action, time-1)
+                            else: continue
+                        elif action == Directions.SOUTH:
+                            if (i, j+1, action) in legal_actions:
+                                previous_symbol = logic.PropSymbolExpr('P', i, j+1, time-1)
+                                action_symbol = logic.PropSymbolExpr(action, time-1)
+                            else: continue
+                            # NOTE: SHOULD NOT NEED TO STOP!
+                            # elif action == Directions.STOP:
+                            #     pass
+                        expressions.append(previous_symbol & action_symbol)
+                models.append(logic.to_cnf(current_symbol  % atLeastOne(expressions))) # % means <=>, this is VERY UGLY
         return models
 
     def initial_models(problem):
@@ -259,8 +261,8 @@ def positionLogicPlan(problem):
         walls = problem.walls
         width = problem.getWidth() + 2 #walls surround original grid
         height = problem.getHeight() + 2
-        for i in range(width):
-            for j in range(height):
+        for i in xrange(width):
+            for j in xrange(height):
                 if i >= 1 and j >= 1 and i <=width-1 and j <= height-1:
                     if i is not initial_state[0] or j is not initial_state[1]:
                         if walls[i][j]:
@@ -285,28 +287,22 @@ def positionLogicPlan(problem):
         for action in actions:
             expressions.append(logic.PropSymbolExpr(action, time))
         return [exactlyOne(expressions)]
-
-    # def create_location_exclusion_axioms(problem, time):
-    #     expressions = []
-    #     for i in range(1, problem.getWidth()+1):
-    #         for j in range(1, problem.getHeight()+1):
-    #             expressions.append(logic.PropSymbolExpr('P', i, j, 0))
-    #     return [exactlyOne(expressions)]
-
-
     
     MAX_TIME_STEPS = 50
     actions = [Directions.NORTH, Directions.EAST, Directions.SOUTH, Directions.WEST]
     initial_models = initial_models(problem)
     successor_state_axioms = []
     action_exclusion_axioms = []
-    for t in range(MAX_TIME_STEPS):
-        print "t: ", t
+    legal_actions = set()
+    for x in xrange(1, problem.getWidth()+1):
+        for y in xrange(1, problem.getHeight()+1):
+            if not problem.isWall((x, y)):
+                for action in problem.actions((x, y)):
+                    legal_actions.add((x, y, action))
+    for t in xrange(MAX_TIME_STEPS):
         goal_assertion = goal_sentence(problem, t)
         if t > 0:
-            print "TRANSITION MODEL ALGORITHM BEGIN"
-            successor_state_axioms += transition_models(problem, t, actions)
-            print "TRANSITION MODEL ALGORITHM FINISH"
+            successor_state_axioms += transition_models(problem, t, actions, legal_actions)
             action_exclusion_axioms += create_action_exclusion_axioms(actions, t-1)
         solution_model = logic.pycoSAT(initial_models + successor_state_axioms + goal_assertion + action_exclusion_axioms)
         if solution_model is not False:
