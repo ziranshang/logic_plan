@@ -223,7 +223,6 @@ def positionLogicPlan(problem):
         for i in range(1, problem.getWidth()+1):
             for j in range(1, problem.getHeight()+1):
                 current_symbol = logic.PropSymbolExpr('P', i, j, time)
-                # print "CURRENT_SYMBOL: ", current_symbol
                 not_wall_symbol = ~logic.PropSymbolExpr('W', i, j)
                 expressions = []
                 for action in actions:
@@ -250,44 +249,37 @@ def positionLogicPlan(problem):
                     # elif action == Directions.STOP:
                     #     pass
                     expressions.append(previous_symbol & previous_not_wall_symbol & action_symbol)
-                # print "EXPRESSIONS: ", expressions
-                fluent_sentence = atLeastOne(expressions)
-                # print "FLUENT_SENTENCE: ", fluent_sentence
-                model = current_symbol % (not_wall_symbol & fluent_sentence) # % means <=>, this is VERY UGLY
-                # print "MODEL: ", model
-                cnf_model = logic.to_cnf(model)
-                # print "CNF MODEL: ", cnf_model
-                models.append(cnf_model)
+                    # expressions.append(previous_symbol & action_symbol)
+                models.append(logic.to_cnf((current_symbol & not_wall_symbol) % atLeastOne(expressions))) # % means <=>, this is VERY UGLY
         return models
 
-    def initial_models(problem):
+    def initial_models(problem, set):
         initial_state = problem.getStartState() # pacman initial position
         models = [logic.PropSymbolExpr('P', initial_state[0], initial_state[1], 0)] # pacman at initial position at time 0
-        for i in range(1, problem.getWidth()+1):
-            for j in range(1, problem.getHeight()+1):
-                if i is not initial_state[0] or j is not initial_state[1]:
-                    not_start_state = ~logic.PropSymbolExpr('P', i, j, 0)
-                    models.append(not_start_state)
         walls = problem.walls
         width = problem.getWidth() + 2 #walls surround original grid
         height = problem.getHeight() + 2
         for i in range(width):
             for j in range(height):
-                if walls[i][j]:
-                    models.append(logic.PropSymbolExpr('W', i, j))
+                if i >= 1 and j >= 1 and i <=width-1 and j <= height-1:
+                    if i is not initial_state[0] or j is not initial_state[1]:
+                        if walls[i][j]:
+                            models.append(logic.PropSymbolExpr('W', i, j))
+                        else:
+                            models.append(~logic.PropSymbolExpr('W', i, j))
+                        not_start_state = ~logic.PropSymbolExpr('P', i, j, 0)
+                        models.append(not_start_state)
                 else:
-                    models.append(~logic.PropSymbolExpr('W', i, j))
-        # print "ARE INITIAL_MODELS VALID?: ", [is_valid_cnf(model) for model in models]
+                    if walls[i][j]:
+                        models.append(logic.PropSymbolExpr('W', i, j))
+                    else:
+                        models.append(~logic.PropSymbolExpr('W', i, j))
         return models
 
     def goal_sentence(problem, t):
         goal_state = problem.getGoalState()
         goal_sentence = logic.PropSymbolExpr('P', goal_state[0], goal_state[1], t)
-        # print "IS GOAL VALID?: ", is_valid_cnf(goal_sentence)
-        return [goal_sentence]
-
-    # def precondition_axioms(problem, actions):
-    
+        return [goal_sentence]    
     def create_action_exclusion_axioms(actions, time):
         expressions = []
         for action in actions:
@@ -309,6 +301,7 @@ def positionLogicPlan(problem):
     successor_state_axioms = []
     action_exclusion_axioms = []
     for t in range(MAX_TIME_STEPS):
+        print "t: ", t
         goal_assertion = goal_sentence(problem, t)
         if t > 0:
             successor_state_axioms += transition_models(problem, t, actions)
