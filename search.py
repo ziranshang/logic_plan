@@ -242,7 +242,9 @@ def transition_models(problem, time, actions, legal_actions):
                         # elif action == Directions.STOP:
                         #     pass
                     expressions.append(previous_symbol & action_symbol)
-            models.append(logic.to_cnf(current_symbol  % atLeastOne(expressions))) # % means <=>, this is VERY UGLY
+            before_cnf = current_symbol  % atLeastOne(expressions)
+
+            models.append(logic.to_cnf(before_cnf)) # % means <=>, this is VERY UGLY
     return models
 
 def get_initial_models(problem):
@@ -311,6 +313,7 @@ def positionLogicPlan(problem):
 def get_food_initial_models(problem):
     initial_state = problem.getStartState() # pacman initial position
     models = [logic.PropSymbolExpr('P', initial_state[0][0], initial_state[0][1], 0)] # pacman at initial position at time 0
+    print models
     walls = problem.walls
     width = problem.getWidth() + 2 #walls surround original grid
     height = problem.getHeight() + 2
@@ -338,17 +341,13 @@ def get_food_axioms(problem, max_time):
         food_list = problem.getStartState()[1].asList()
         for food in food_list:
             expressions = []
-            for t in xrange(max_time):
+            for t in xrange(max_time+1):
                 expressions.append(logic.PropSymbolExpr("P", food[0], food[1], t))
-            position_sentences = atLeastOne(expressions)
-        # for i in xrange(1, width-1):
-        #     for j in xrange(1, height-1):
-        #         expressions.append(logic.PropSymbolExpr('P', i, j, time))
-        # position_sentences = atLeastOne(expressions)
-        
-            before_cnf = position_sentences % ~logic.PropSymbolExpr("F", food[0], food[1])
-            # print "FOOD AXIOMS: ", before_cnf
-            models.append(logic.to_cnf(before_cnf))
+            if expressions:
+                position_sentences = atLeastOne(expressions)
+                before_cnf = ~logic.PropSymbolExpr("F", food[0], food[1]) % position_sentences
+                # print "FOOD AXIOMS: ", before_cnf
+                models.append(logic.to_cnf(before_cnf))
         return models
 
 def food_goal_sentence(problem, time):
@@ -358,7 +357,7 @@ def food_goal_sentence(problem, time):
             goal.append(~logic.PropSymbolExpr("F", food[0], food[1]))
         expressions = []
         for position in food_list:
-            expressions.append(logic.PropSymbolExpr("P", food[0], food[1], time))
+            expressions.append(logic.PropSymbolExpr("P", position[0], position[1], time))
         goal.append(atLeastOne(expressions))
         # print "GOAL: ", goal
         return goal
@@ -372,6 +371,8 @@ def food_transition_models(problem, time, actions, legal_actions):
         for j in xrange(1, problem.getHeight()+1):
             if not problem.isWall((i, j)):
                 current_symbol = logic.PropSymbolExpr('P', i, j, time)
+
+                # print "CURRENT TRANSITION FOR: ", current_symbol
                 expressions = []
                 for action in actions:
                     previous_symbol = None
@@ -400,7 +401,9 @@ def food_transition_models(problem, time, actions, legal_actions):
                         # elif action == Directions.STOP:
                         #     pass
                     expressions.append(previous_symbol & action_symbol)
-            models.append(logic.to_cnf(current_symbol  % atLeastOne(expressions))) # % means <=>, this is VERY UGLY
+            before_cnf = current_symbol  % atLeastOne(expressions)
+            # print "TRANSITION MODEL: ", before_cnf
+            models.append(logic.to_cnf(before_cnf)) # % means <=>, this is VERY UGLY
     return models
 
 def foodLogicPlan(problem):
@@ -417,7 +420,7 @@ def foodLogicPlan(problem):
     initial_models = get_food_initial_models(problem)
     successor_state_axioms = []
     action_exclusion_axioms = []
-    food_axioms = get_food_axioms(problem, MAX_TIME_STEPS)
+    
     # food_list = problem.getStartState()[1].asList()
     legal_actions = set()
     for x in xrange(1, problem.getWidth()+1):
@@ -426,7 +429,7 @@ def foodLogicPlan(problem):
                 for action in problem.actions(((x, y), problem.getStartState()[1])):
                     legal_actions.add((x, y, action))
     for t in xrange(MAX_TIME_STEPS):
-        print "t: ", t
+        food_axioms = get_food_axioms(problem, t)
         goal_assertion = food_goal_sentence(problem, t)
         if t > 0:
             successor_state_axioms += food_transition_models(problem, t, actions, legal_actions)
@@ -435,6 +438,7 @@ def foodLogicPlan(problem):
         # print "successors: ", successor_state_axioms
         sentence = initial_models + successor_state_axioms + goal_assertion + action_exclusion_axioms + food_axioms
         solution_model = logic.pycoSAT(sentence)
+        # print solution_model
 
         if solution_model is not False:
             actions = extractActionSequence(solution_model, actions)
