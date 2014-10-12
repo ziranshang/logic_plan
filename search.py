@@ -12,7 +12,6 @@
 # Student side autograding was added by Brad Miller, Nick Hay, and 
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
 from logic import pycoSAT
-from logic_extra import is_valid_cnf
 from game import Game, Directions
 
 
